@@ -76,4 +76,11 @@ EXEMPLARS: dict[RiskCategory, tuple[str, ...]] = {
         "sponsored post, affiliate link in my bio",
         "рекламная интеграция, скидка по моему промокоду",
     ),
+    RiskCategory.ILLICIT_JOB_RECRUITMENT: (
+        "ищем курьеров, лёгкий заработок, пиши в телеграм",
+        "работа курьером, доход от трёх тысяч рублей в день, подробности в телеграме",
+        "нужны люди на подработку, быстрые деньги без опыта, ссылка в телеграм",
+        "требуются раскладчики, высокий доход, оптовые поставки, пиши в личку",
+        "easy money courier job, high daily pay, message me on telegram",
+    ),
 }

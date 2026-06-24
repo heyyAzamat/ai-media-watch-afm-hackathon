@@ -43,6 +43,41 @@ def test_no_false_positive_on_benign_text():
     assert out == []
 
 
+def test_detects_russian_courier_recruitment_with_telegram_and_income():
+    analyzer = TextRiskAnalyzer()
+    ocr = [OcrResult(
+        timestamp=4.0,
+        text="Срочно работа курьером, доход 3000Р в день, ссылка в телеграм",
+        confidence=0.95,
+    )]
+    cats = {e.category for e in analyzer.analyze(ocr, Transcript())}
+    assert RiskCategory.ILLICIT_JOB_RECRUITMENT in cats  # "работа курьером"
+    assert RiskCategory.GUARANTEED_INCOME in cats  # numeric "3000Р в день" regex
+    assert RiskCategory.HIDDEN_ADVERTISING in cats  # "ссылка в телеграм" redirect
+
+
+def test_ocr_lines_joined_per_frame_catch_cross_line_phrase():
+    # PaddleOCR splits the caption across detections at the SAME timestamp; the
+    # courier-recruitment cue ("набирают") and "курьеров" land on separate lines.
+    analyzer = TextRiskAnalyzer()
+    ocr = [
+        OcrResult(timestamp=4.0, text="Срочно набирают", confidence=0.99),
+        OcrResult(timestamp=4.0, text="курьеров", confidence=0.99),
+        OcrResult(timestamp=4.0, text="Доход от 3000 ₽ в", confidence=0.93),
+        OcrResult(timestamp=4.0, text="день", confidence=0.99),
+    ]
+    cats = {e.category for e in analyzer.analyze(ocr, Transcript())}
+    # Would miss both if scanned line-by-line; joining the frame's lines catches them.
+    assert RiskCategory.ILLICIT_JOB_RECRUITMENT in cats
+    assert RiskCategory.GUARANTEED_INCOME in cats
+
+
+def test_benign_russian_text_is_silent():
+    analyzer = TextRiskAnalyzer()
+    ocr = [OcrResult(timestamp=1.0, text="Спасибо за просмотр, подписывайтесь!", confidence=0.99)]
+    assert analyzer.analyze(ocr, Transcript()) == []
+
+
 def test_confidence_tempered_by_ocr_confidence():
     analyzer = TextRiskAnalyzer()
     hi = analyzer.analyze([OcrResult(timestamp=1.0, text="casino jackpot", confidence=1.0)], Transcript())

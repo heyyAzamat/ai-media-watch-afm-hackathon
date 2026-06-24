@@ -37,6 +37,7 @@ _CATEGORY_LABEL: dict[RiskCategory, str] = {
     RiskCategory.FAKE_INVESTMENT: "Fake investment",
     RiskCategory.FINANCIAL_MANIPULATION: "Manipulation tactic",
     RiskCategory.HIDDEN_ADVERTISING: "Hidden advertising",
+    RiskCategory.ILLICIT_JOB_RECRUITMENT: "Illicit job recruitment",
     RiskCategory.SUSPICIOUS_FINANCIAL: "Suspicious financial content",
 }
 

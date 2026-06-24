@@ -13,9 +13,15 @@ The provider is robust to both PaddleOCR generations:
 from __future__ import annotations
 
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any
+
+# ponytail: PaddlePaddle's oneDNN/PIR CPU path crashes on some builds
+# (ConvertPirAttribute2RuntimeAttribute not support). Disabling MKL-DNN routes
+# around it at a small speed cost. Override AIMW_… by exporting FLAGS_use_mkldnn=1.
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 from ...config import get_settings
 from ...domain.models import Frame, OcrResult
@@ -51,7 +57,8 @@ class PaddleOcrProvider:
         video overlays) are tried first; falls back to PaddleOCR defaults, then
         to the 2.x legacy constructor.
         """
-        base: dict = {"lang": self._lang}
+        # enable_mkldnn=False avoids the oneDNN/PIR CPU crash (see module top).
+        base: dict = {"lang": self._lang, "enable_mkldnn": False}
         if not self._use_doc_preproc:
             base.update(
                 use_doc_orientation_classify=False,
@@ -71,7 +78,7 @@ class PaddleOcrProvider:
             fastest,  # mobile + no doc preproc + device + batch size
             dict(light, device=self._device),  # drop batch-size kwarg
             dict(base, device=self._device),  # drop model names
-            {"lang": self._lang},  # 3.x bundled defaults
+            {"lang": self._lang, "enable_mkldnn": False},  # 3.x bundled defaults
             {"use_angle_cls": True, "lang": self._lang, "show_log": False},  # 2.x legacy
         ]
 

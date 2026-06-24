@@ -40,6 +40,9 @@ class RiskCategory(StrEnum):
     FAKE_INVESTMENT = "fake_investment"
     FINANCIAL_MANIPULATION = "financial_manipulation"
     HIDDEN_ADVERTISING = "hidden_advertising"
+    # Easy-money / courier "job" recruitment that redirects off-platform
+    # (Telegram). The dominant Russian-language lure: дроп/закладчик recruiting.
+    ILLICIT_JOB_RECRUITMENT = "illicit_job_recruitment"
     SUSPICIOUS_FINANCIAL = "suspicious_financial"
     NONE = "none"
 
@@ -53,6 +56,7 @@ HIGH_SEVERITY_CATEGORIES: frozenset[RiskCategory] = frozenset(
         RiskCategory.SPORTS_BETTING,
         RiskCategory.PYRAMID_SCHEME,
         RiskCategory.PONZI_SCHEME,
+        RiskCategory.ILLICIT_JOB_RECRUITMENT,
     }
 )
 

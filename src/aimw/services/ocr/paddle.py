@@ -13,9 +13,15 @@ The provider is robust to both PaddleOCR generations:
 from __future__ import annotations
 
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any
+
+# ponytail: PaddlePaddle's oneDNN/PIR CPU path crashes on some builds
+# (ConvertPirAttribute2RuntimeAttribute not support). Disabling MKL-DNN routes
+# around it at a small speed cost. Override AIMW_… by exporting FLAGS_use_mkldnn=1.
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 from ...config import get_settings
 from ...domain.models import Frame, OcrResult
@@ -53,8 +59,9 @@ class PaddleOcrProvider:
         """
         # enable_mkldnn=False is REQUIRED on PaddlePaddle 3.x CPU: the oneDNN +
         # new-PIR executor path crashes on every frame with
-        # "ConvertPirAttribute2RuntimeAttribute not support" — disabling oneDNN
-        # routes to the standard CPU kernels and OCR works.
+        # "ConvertPirAttribute2RuntimeAttribute not support". Disabling oneDNN
+        # routes to the standard CPU kernels and OCR works. (Belt-and-suspenders:
+        # the module top also sets FLAGS_use_mkldnn=0.)
         base: dict = {"lang": self._lang, "enable_mkldnn": False}
         if not self._use_doc_preproc:
             base.update(

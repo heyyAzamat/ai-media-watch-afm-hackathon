@@ -87,8 +87,15 @@ def compute_fallback_verdict(
     distinct_sources = {s for ev in graph.events for s in ev.sources}
     corroboration_bonus = 0.1 * (len(distinct_sources) - 1)
     severity_bonus = 0.1 if category in HIGH_SEVERITY_CATEGORIES else 0.0
+    # Multiple independent scam patterns co-occurring (e.g. courier recruitment +
+    # unrealistic daily income + off-platform Telegram redirect) is strong
+    # corroboration in itself — hard to trigger by accident — even from one modality.
+    scam_categories = [c for c, v in aggregates.items() if c != RiskCategory.NONE and v >= 0.3]
+    category_bonus = min(0.3, 0.15 * (len(scam_categories) - 1))
     confidence = round(min(1.0, base_conf), 3)
-    risk_score = int(round(min(1.0, base_conf + corroboration_bonus + severity_bonus) * 100))
+    risk_score = int(round(
+        min(1.0, base_conf + corroboration_bonus + severity_bonus + category_bonus) * 100
+    ))
 
     high_events = [ev for ev in timeline if ev.severity in (Severity.HIGH, Severity.MEDIUM)]
     suspicious_ts = sorted({round(ev.start, 1) for ev in high_events})

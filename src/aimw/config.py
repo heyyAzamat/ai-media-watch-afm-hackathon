@@ -14,10 +14,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ProviderMode = Literal["mock", "real", "disabled"]
-# Visual additionally supports "none"/"disabled" (no VLM, returns no detections)
-# for the data-sovereign CPU profile — unlike "mock", it never fabricates evidence.
-# "none" and "disabled" are synonyms (two teammates named it independently).
+# Visual + speech also support "none"/"disabled" (no model; no detections / empty
+# transcript) for the data-sovereign CPU profile — unlike "mock", they never
+# fabricate evidence. "none" and "disabled" are synonyms (named independently by
+# two teammates; both accepted everywhere).
 VisualProviderMode = Literal["mock", "real", "none", "disabled"]
+SpeechProviderMode = Literal["mock", "real", "none", "disabled"]
 SemanticMode = Literal["off", "local"]
 OcrFrameStrategy = Literal["all", "keyframes", "dedup"]
 VisualGating = Literal["off", "dedup", "text_risk"]
@@ -60,7 +62,7 @@ class Settings(BaseSettings):
 
     # ── Pipeline ────────────────────────────────────────────────────────────
     ocr_provider: ProviderMode = "mock"
-    speech_provider: ProviderMode = "mock"
+    speech_provider: SpeechProviderMode = "mock"
     visual_provider: VisualProviderMode = "mock"
     frames_per_second: float = 1.0
     fusion_window_seconds: float = 1.5
@@ -73,10 +75,15 @@ class Settings(BaseSettings):
     # OCR engine (PaddleOCR). Mobile det/rec + no document preprocessing is
     # ~3x faster on upright social-media overlay text at negligible accuracy
     # cost. Set model names to None to use PaddleOCR's bundled defaults.
-    ocr_lang: str = "en"
+    # Default to Russian: PaddleOCR's "ru" model reads Cyrillic + Latin + digits,
+    # so it covers RU/EN AFM content. Override AIMW_OCR_LANG=en for Latin-only.
+    ocr_lang: str = "ru"
     ocr_min_confidence: float = 0.5
-    ocr_det_model_name: str | None = "PP-OCRv5_mobile_det"
-    ocr_rec_model_name: str | None = "PP-OCRv5_mobile_rec"
+    # Leave model names unset so PaddleOCR picks the model matching ocr_lang (ru ->
+    # East-Slavic recogniser). Pinning a model name overrides lang, so only set
+    # these (e.g. PP-OCRv5_mobile_det/rec) when you also set ocr_lang to match.
+    ocr_det_model_name: str | None = None
+    ocr_rec_model_name: str | None = None
     ocr_use_doc_preprocessing: bool = False  # doc-orientation + unwarp + textline-ori
     # GPU batching: send N frames per predict() call (also the recognition batch
     # size). On "gpu" this batches crops on-device for a large speedup; on "cpu"

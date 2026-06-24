@@ -29,3 +29,5 @@ storage/frames/*
 .idea/
 .vscode/
 .DS_Store
+.gstack/
+.vercel

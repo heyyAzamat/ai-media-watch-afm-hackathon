@@ -33,3 +33,16 @@ def test_build_scam_model_defaults_to_orchestrator(monkeypatch):
         assert model.name == "orchestrator-pipeline"
     finally:
         get_settings.cache_clear()
+
+
+def test_build_scam_model_loads_ml_template(monkeypatch):
+    """The 'ml' switch must construct the ML model cleanly, so dropping in the
+    real implementation is a one-value change (the merge point)."""
+    monkeypatch.setenv("AIMW_SCAM_MODEL_PROVIDER", "ml")
+    get_settings.cache_clear()
+    try:
+        model = build_scam_model()
+        assert isinstance(model, ScamModel)
+        assert model.name == "ml-embedding-model"
+    finally:
+        get_settings.cache_clear()

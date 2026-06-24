@@ -31,7 +31,8 @@ _LEXICONS: tuple[_Lexicon, ...] = (
     _Lexicon(
         RiskCategory.CASINO_ADVERTISING,
         ("casino", "roulette", "slot machine", "slots", "jackpot", "free spins",
-         "deposit bonus", "welcome bonus", "1xbet", "1xcasino", "spin to win"),
+         "deposit bonus", "welcome bonus", "1xbet", "1xcasino", "spin to win",
+         "казино", "рулетка", "игровые автоматы", "джекпот", "ставки", "фриспины"),
         0.45,
     ),
     _Lexicon(
@@ -54,7 +55,12 @@ _LEXICONS: tuple[_Lexicon, ...] = (
          # Russian — daily-income lures (numeric "доход 3000Р в день" → _REGEX_RULES)
          "доход в день", "доход каждый день", "заработок в день", "пассивный доход",
          "гарантированный доход", "доход без вложений", "без вложений", "без риска",
-         "зарабатывай каждый день", "деньги каждый день"),
+         "зарабатывай каждый день", "деньги каждый день",
+         # "don't work, get paid" / stability-promise lures
+         "не работать", "больше денег", "большие выплаты", "большие заработные выплаты",
+         "жить на широкую ногу", "стабильный доход", "надёжный доход", "надежный доход",
+         "надёжное будущее", "надежное будущее", "стабильно надёжное", "стабильно надежное",
+         "финансовая свобода", "финансовая независимость"),
         0.45,
     ),
     _Lexicon(
@@ -78,7 +84,10 @@ _LEXICONS: tuple[_Lexicon, ...] = (
     _Lexicon(
         RiskCategory.FAKE_INVESTMENT,
         ("crypto investment", "forex signals", "trading bot", "guaranteed trade",
-         "investment opportunity", "fund manager", "copy trading"),
+         "investment opportunity", "fund manager", "copy trading",
+         "схема заработка", "новая схема заработка", "вкладывать деньги", "вкладывай деньги",
+         "вложить деньги", "вложи деньги", "приумножить деньги", "инвестируй", "инвестиции",
+         "криптовалюта", "трейдинг", "торговый бот"),
         0.4,
     ),
     _Lexicon(
@@ -153,6 +162,11 @@ _REGEX_RULES: tuple[tuple[RiskCategory, float, re.Pattern[str]], ...] = (
     (RiskCategory.GUARANTEED_INCOME, 0.45,
      re.compile(r"(?:от\s+)?\d[\d\s.,]*\s*(?:руб\w*|тенге|₽|тг|р|\$|€)\s*"
                 r"[^.\n]{0,4}(?:в|/)\s*день", re.IGNORECASE)),
+    # "финансовая пирамида" — typo-tolerant (пирам\w* also matches Whisper's
+    # "пирамира"). Even a preemptive denial ("это не финансовая пирамида") is a
+    # screening signal worth surfacing.
+    (RiskCategory.PONZI_SCHEME, 0.5,
+     re.compile(r"финансов\w*\s+пирам\w*", re.IGNORECASE)),
 )
 
 

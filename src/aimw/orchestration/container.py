@@ -28,6 +28,7 @@ from ..services.ocr import build_ocr_provider
 from ..services.reasoning import build_reasoning_engine
 from ..services.reporting import ReportingService
 from ..services.scene import PySceneDetectDetector
+from ..services.semantic import build_semantic_matcher
 from ..services.speech import build_speech_provider
 from ..services.text_risk import TextRiskAnalyzer
 from ..services.timeline import TimelineService
@@ -64,7 +65,9 @@ def build_container(settings: Settings | None = None) -> EngineContainer:
         ocr=build_ocr_provider(settings.ocr_provider),
         speech=build_speech_provider(settings.speech_provider),
         visual=build_visual_provider(settings.visual_provider),
-        text_risk=TextRiskAnalyzer(),
+        text_risk=TextRiskAnalyzer(
+            semantic=build_semantic_matcher(settings.semantic_provider)
+        ),
         fusion=FusionService(settings.fusion_window_seconds),
         timeline=TimelineService(),
         reasoning=build_reasoning_engine(),

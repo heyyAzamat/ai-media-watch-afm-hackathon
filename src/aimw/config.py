@@ -14,6 +14,10 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ProviderMode = Literal["mock", "real"]
+# Visual additionally supports "none" (no VLM, returns no detections) for the
+# data-sovereign CPU profile — unlike "mock", it never fabricates evidence.
+VisualProviderMode = Literal["mock", "real", "none"]
+SemanticMode = Literal["off", "local"]
 OcrFrameStrategy = Literal["all", "keyframes", "dedup"]
 VisualGating = Literal["off", "dedup", "text_risk"]
 
@@ -50,7 +54,7 @@ class Settings(BaseSettings):
     # ── Pipeline ────────────────────────────────────────────────────────────
     ocr_provider: ProviderMode = "mock"
     speech_provider: ProviderMode = "mock"
-    visual_provider: ProviderMode = "mock"
+    visual_provider: VisualProviderMode = "mock"
     frames_per_second: float = 1.0
     fusion_window_seconds: float = 1.5
     # OCR is the dominant cost: only OCR visually-distinct frames by default.
@@ -99,6 +103,18 @@ class Settings(BaseSettings):
     visual_gating_window_seconds: float = 3.0
     visual_max_keyframes: int = 0  # 0 = unlimited; else hard cap on VLM calls
 
+    # ── Semantic matcher (local embeddings, no external API) ─────────────────
+    # Optional additive text-risk source: catches paraphrased scams the lexicon
+    # misses, runs on CPU, no data leaves the box. "off" by default so tests/CI
+    # stay offline and the lexicon-only baseline is the A/B control. Set "local"
+    # for the data-sovereign profile. paraphrase-multilingual-MiniLM is ru/kk/en
+    # capable, ~470MB, CPU-friendly (swap for an e5 / Kazakh model if desired).
+    semantic_provider: SemanticMode = "off"
+    semantic_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    semantic_threshold: float = 0.6  # min cosine similarity to flag a span
+    semantic_weight: float = 0.8  # a perfect paraphrase scores just under an exact hit
+    semantic_device: str = "cpu"
+
     # ── Reasoning engine (OpenRouter) ───────────────────────────────────────
     openrouter_api_key: str = "sk-or-changeme"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -109,13 +125,13 @@ class Settings(BaseSettings):
     # Skip the (paid, ~10s) 72B judge entirely when fusion produced no evidence
     # and return the definitive empty verdict. Saves cost on benign videos.
     reasoning_skip_when_empty: bool = True
-    # Faster judge cascade: run reasoning_fast_model (e.g. a 32B) first and only
-    # escalate to reasoning_model (the authoritative 72B) when the fast judge is
-    # uncertain (confidence below threshold, or catch-all category). Set
-    # reasoning_escalation=false to disable the cascade (use reasoning_model
+    # Faster judge cascade (on by default): run reasoning_fast_model (e.g. a 32B)
+    # first and only escalate to reasoning_model (the authoritative 72B) when the
+    # fast judge is uncertain (confidence below threshold, or catch-all category).
+    # Set reasoning_escalation=false to disable the cascade (use reasoning_model
     # directly — which itself can be pointed at a 32B for pure speed).
     reasoning_fast_model: str = "qwen/qwen3-32b"
-    reasoning_escalation: bool = False
+    reasoning_escalation: bool = True
     reasoning_escalation_confidence: float = 0.6
 
     # ── Webhooks ────────────────────────────────────────────────────────────

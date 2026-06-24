@@ -121,7 +121,15 @@ def _scan(text: str) -> list[tuple[RiskCategory, float, list[str]]]:
 
 
 class TextRiskAnalyzer:
-    """Analyse OCR + transcript text and emit timestamped risk evidence."""
+    """Analyse OCR + transcript text and emit timestamped risk evidence.
+
+    The lexicon scan is always run. An optional ``semantic`` matcher (local
+    embeddings, no external API) appends paraphrase-based evidence in the same
+    :class:`TextRiskEvidence` shape, so fusion/judge/report need no changes.
+    """
+
+    def __init__(self, semantic=None) -> None:  # semantic: SemanticMatcher | None
+        self._semantic = semantic
 
     def analyze(
         self, ocr: list[OcrResult], transcript: Transcript
@@ -155,6 +163,9 @@ class TextRiskAnalyzer:
                         matched_terms=terms,
                     )
                 )
+
+        if self._semantic is not None:
+            evidence.extend(self._semantic.match(ocr, transcript))
 
         evidence.sort(key=lambda e: e.timestamp)
         log.info("text_risk.done", findings=len(evidence))

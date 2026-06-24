@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...config import ProviderMode
+from ...config import VisualProviderMode
 from ..interfaces import VisualProvider
 
 # The labels the VLM must score (0..1). Kept here so mock and real providers
@@ -39,11 +39,15 @@ Return ONLY valid JSON of the form:
  "evidence": ["short phrase", "..."]}"""
 
 
-def build_visual_provider(mode: ProviderMode) -> VisualProvider:
+def build_visual_provider(mode: VisualProviderMode) -> VisualProvider:
     if mode == "real":
         from .qwen_vl import QwenVLProvider
 
         return QwenVLProvider()
+    if mode == "none":
+        from .none import NoneVisualProvider
+
+        return NoneVisualProvider()
     from .mock import MockVisualProvider
 
     return MockVisualProvider()

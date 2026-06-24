@@ -1,6 +1,13 @@
 # GPU / inference-node requirements. Install on workers that run the real
 # ML providers (PaddleOCR, faster-whisper, Qwen2.5-VL). Not needed for the
 # API service or for running with the mock providers.
+#
+# Env hygiene (see docs/PERFORMANCE.md #9): PaddleOCR pulls a full
+# `opencv-python` / `opencv-contrib-python`, duplicating the `opencv-python-headless`
+# we already use. After installing this file, drop the redundant builds so a
+# single cv2 (headless) remains:
+#   pip uninstall -y opencv-python opencv-contrib-python
+#   pip install --force-reinstall --no-deps "opencv-python-headless>=4.9"
 -r requirements.txt
 paddleocr>=2.7
 paddlepaddle>=2.6
@@ -9,3 +16,6 @@ torch>=2.2
 transformers>=4.41
 qwen-vl-utils>=0.0.8
 Pillow>=10.3
+# Local semantic matcher (AIMW_SEMANTIC_PROVIDER=local). Pulls only torch +
+# transformers, both already pinned above — no new heavy dependency.
+sentence-transformers>=3.0

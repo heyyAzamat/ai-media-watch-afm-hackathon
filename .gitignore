@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.env
+.python-version
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Runtime artifacts
+storage/uploads/*
+storage/frames/*
+!storage/uploads/.gitkeep
+!storage/frames/.gitkeep
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

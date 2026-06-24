@@ -1,0 +1,11 @@
+# GPU / inference-node requirements. Install on workers that run the real
+# ML providers (PaddleOCR, faster-whisper, Qwen2.5-VL). Not needed for the
+# API service or for running with the mock providers.
+-r requirements.txt
+paddleocr>=2.7
+paddlepaddle>=2.6
+faster-whisper>=1.0
+torch>=2.2
+transformers>=4.41
+qwen-vl-utils>=0.0.8
+Pillow>=10.3

@@ -1,0 +1,82 @@
+name: ai-media-watch
+
+x-app-env: &app-env
+  AIMW_DATABASE_URL: postgresql+psycopg://aimw:aimw@postgres:5432/aimw
+  AIMW_REDIS_URL: redis://redis:6379/0
+  AIMW_CELERY_BROKER_URL: redis://redis:6379/1
+  AIMW_CELERY_RESULT_BACKEND: redis://redis:6379/2
+  AIMW_STORAGE_DIR: /app/storage
+  AIMW_OCR_PROVIDER: ${AIMW_OCR_PROVIDER:-mock}
+  AIMW_SPEECH_PROVIDER: ${AIMW_SPEECH_PROVIDER:-mock}
+  AIMW_VISUAL_PROVIDER: ${AIMW_VISUAL_PROVIDER:-mock}
+  AIMW_OPENROUTER_API_KEY: ${AIMW_OPENROUTER_API_KEY:-sk-or-changeme}
+  AIMW_REASONING_MODEL: ${AIMW_REASONING_MODEL:-qwen/qwen-2.5-72b-instruct}
+  AIMW_LOG_JSON: "true"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aimw
+      POSTGRES_PASSWORD: aimw
+      POSTGRES_DB: aimw
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aimw"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["python", "-m", "aimw.scripts.init_db"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    command: ["uvicorn", "aimw.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: *app-env
+    ports: ["8000:8000"]
+    volumes: ["storage:/app/storage"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    command: ["celery", "-A", "aimw.workers.celery_app.celery_app", "worker",
+              "--loglevel=INFO", "--concurrency=2"]
+    environment: *app-env
+    volumes: ["storage:/app/storage"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  storage:

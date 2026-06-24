@@ -12,7 +12,7 @@
 <title>ScamShield — проверка видео на мошенничество</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
     --bg: #070b14;
@@ -31,7 +31,7 @@
   html, body { height: 100%; overscroll-behavior-y: contain; }
   html { -webkit-text-size-adjust: 100%; }
   body {
-    font-family: 'Manrope', system-ui, sans-serif;
+    font-family: 'Geist', system-ui, sans-serif;
     background: var(--bg);
     color: var(--txt);
     min-height: 100dvh;
@@ -50,7 +50,7 @@
   /* Header */
   header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin-top: 8px; }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .brand svg { width: 30px; height: 30px; filter: drop-shadow(0 0 10px rgba(56,225,196,.5)); }
+  .brand svg { width: 30px; height: 30px; }
   .brand h1 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
   .brand h1 b { color: var(--accent); font-weight: 800; }
   .tagline { color: var(--muted); font-size: 14.5px; line-height: 1.5; max-width: 340px; }
@@ -71,8 +71,8 @@
   button.go {
     width: 100%; padding: 16px; border: none; border-radius: 13px; cursor: pointer;
     font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: .01em;
-    color: #04140f; background: linear-gradient(180deg, #4ff0d2, #25c4a8);
-    box-shadow: 0 10px 30px -10px rgba(56,225,196,.6); transition: transform .12s, opacity .2s;
+    color: #04140f; background: linear-gradient(180deg, #3ee0c2, #25c4a8);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 8px 22px -14px rgba(0,0,0,.75); transition: transform .12s, opacity .2s;
   }
   button.go:active { transform: translateY(1px) scale(.995); }
   button.go:disabled { opacity: .55; cursor: not-allowed; }
@@ -89,8 +89,8 @@
   }
   .radar::after { animation-delay: .9s; }
   @keyframes pulse { 0% { transform: scale(.4); opacity: .7; } 100% { transform: scale(1); opacity: 0; } }
-  .radar i { position: absolute; inset: 30px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 18px var(--accent); }
-  .status { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 13.5px; min-height: 18px; letter-spacing: .02em; }
+  .radar i { position: absolute; inset: 30px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(56,225,196,.4); }
+  .status { color: var(--accent); font-family: 'Geist Mono', monospace; font-size: 13.5px; min-height: 18px; letter-spacing: .02em; }
 
   /* Result */
   .result { display: none; }
@@ -103,14 +103,14 @@
   .ring .track { fill: none; stroke: #16213a; stroke-width: 13; }
   .ring .bar { fill: none; stroke-width: 13; stroke-linecap: round; transition: stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1), stroke .4s; }
   .ring .num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .ring .num b { font-family: 'JetBrains Mono', monospace; font-size: 52px; font-weight: 700; line-height: 1; }
+  .ring .num b { font-family: 'Geist Mono', monospace; font-size: 52px; font-weight: 700; line-height: 1; }
   .ring .num span { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
 
   .verdict { text-align: center; margin-top: 16px; }
   .verdict .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 15px; }
   .verdict .cat { margin-top: 14px; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
   .verdict .why { margin-top: 10px; color: var(--muted); font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
-  .meta { margin-top: 18px; display: flex; justify-content: center; gap: 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+  .meta { margin-top: 18px; display: flex; justify-content: center; gap: 18px; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted); }
   .meta b { color: var(--txt); }
 
   .again { margin-top: 22px; }
@@ -213,6 +213,14 @@
   };
   const STEPS = ["Скачиваю видео…", "Извлекаю аудио…", "Распознаю речь (Whisper)…", "Анализирую признаки…", "Формирую вердикт…"];
 
+  // Inline SVG icons (no emojis — they render inconsistently and read as AI slop).
+  const svg = (p) => '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
+  const ICONS = {
+    safe: svg('<path d="M20 6 9 17l-5-5"/>'),
+    warn: svg('<path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'),
+    alert: svg('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>'),
+  };
+
   const $ = (id) => document.getElementById(id);
   const form = $("form"), scanner = $("scanner"), result = $("result"), errBox = $("err");
   const C = 2 * Math.PI * 80; // ring circumference
@@ -240,9 +248,9 @@
     return getComputedStyle(document.documentElement).getPropertyValue("--safe").trim();
   }
   function verdictLabel(score) {
-    if (score >= 70) return { t: "🚨 Высокий риск мошенничества", c: "--danger" };
-    if (score >= 40) return { t: "⚠️ Подозрительно", c: "--warn" };
-    return { t: "✅ Угроз не обнаружено", c: "--safe" };
+    if (score >= 70) return { key: "alert", t: "Высокий риск мошенничества", c: "--danger" };
+    if (score >= 40) return { key: "warn", t: "Подозрительно", c: "--warn" };
+    return { key: "safe", t: "Угроз не обнаружено", c: "--safe" };
   }
 
   function render(v) {
@@ -257,7 +265,7 @@
     (function tick(now){ const p = Math.min(1, (now - t0) / 1000); n = Math.round(p * score); $("score").textContent = n; if (p < 1) requestAnimationFrame(tick); })(t0);
     // verdict text
     const badge = $("badge");
-    badge.textContent = lab.t;
+    badge.innerHTML = ICONS[lab.key] + "<span>" + lab.t + "</span>";
     const cval = getComputedStyle(document.documentElement).getPropertyValue(lab.c).trim();
     badge.style.color = cval; badge.style.background = cval + "1f";
     $("cat").textContent = CAT_RU[v.category] || v.category || "—";
@@ -292,7 +300,8 @@
 
   function showError(msg) {
     setState("form");
-    errBox.textContent = "⚠️ " + msg;
+    errBox.innerHTML = '<span style="display:inline-flex;gap:8px;align-items:flex-start">' + ICONS.warn + '<span></span></span>';
+    errBox.querySelector("span > span").textContent = msg;
     errBox.classList.add("on");
   }
 

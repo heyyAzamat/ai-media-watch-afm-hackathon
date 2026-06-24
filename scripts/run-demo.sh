@@ -23,8 +23,14 @@ fi
 echo "Starting backend on :$PORT ..."
 uvicorn aimw.main:app --host 0.0.0.0 --port "$PORT" >/tmp/scamshield-api.log 2>&1 &
 API_PID=$!
-sleep 5
-curl -fsS "localhost:$PORT/health" >/dev/null && echo "  backend up (pid $API_PID)" || { echo "  backend failed — see /tmp/scamshield-api.log"; exit 1; }
+# Startup loads Whisper + the semantic model (~30-60s on first run); poll health.
+echo "  loading models (Whisper + semantic), up to ~90s…"
+UP=0
+for _ in $(seq 1 45); do
+  if curl -fsS "localhost:$PORT/health" >/dev/null 2>&1; then UP=1; break; fi
+  sleep 2
+done
+[ "$UP" = "1" ] && echo "  backend up (pid $API_PID)" || { echo "  backend failed — see /tmp/scamshield-api.log"; exit 1; }
 
 # 3. tunnel
 CF="$(command -v cloudflared || echo "$HOME/.local/bin/cloudflared")"

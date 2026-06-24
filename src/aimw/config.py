@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ProviderMode = Literal["mock", "real"]
+ProviderMode = Literal["mock", "real", "disabled"]
 OcrFrameStrategy = Literal["all", "keyframes", "dedup"]
 VisualGating = Literal["off", "dedup", "text_risk"]
 

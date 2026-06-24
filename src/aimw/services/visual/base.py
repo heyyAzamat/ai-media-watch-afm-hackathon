@@ -39,11 +39,23 @@ Return ONLY valid JSON of the form:
  "evidence": ["short phrase", "..."]}"""
 
 
+class _NullVisualProvider:
+    """Visual analysis turned off — returns no detections (honest demo,
+    no fabrication, no external VLM)."""
+
+    name = "disabled-visual"
+
+    async def analyze(self, keyframes):  # noqa: ANN001, ANN201
+        return []
+
+
 def build_visual_provider(mode: ProviderMode) -> VisualProvider:
     if mode == "real":
         from .qwen_vl import QwenVLProvider
 
         return QwenVLProvider()
+    if mode == "disabled":
+        return _NullVisualProvider()
     from .mock import MockVisualProvider
 
     return MockVisualProvider()

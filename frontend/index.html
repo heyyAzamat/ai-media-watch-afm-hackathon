@@ -4,6 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#070b14" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ScamShield" />
 <link rel="manifest" href="manifest.json" />
 <title>ScamShield — проверка видео на мошенничество</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -23,8 +27,9 @@
     --danger: #ff4d5e;
     --glow: 0 0 0 1px var(--line), 0 18px 60px -20px rgba(0,0,0,.8);
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overscroll-behavior-y: contain; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     font-family: 'Manrope', system-ui, sans-serif;
     background: var(--bg);
@@ -104,7 +109,7 @@
   .verdict { text-align: center; margin-top: 16px; }
   .verdict .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 15px; }
   .verdict .cat { margin-top: 14px; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
-  .verdict .why { margin-top: 10px; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+  .verdict .why { margin-top: 10px; color: var(--muted); font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
   .meta { margin-top: 18px; display: flex; justify-content: center; gap: 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
   .meta b { color: var(--txt); }
 
@@ -138,6 +143,7 @@
         <label class="field-label" for="url">Ссылка на видео</label>
         <div class="input-row">
           <input id="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                 autocapitalize="off" autocorrect="off" enterkeyhint="go"
                  placeholder="https://tiktok.com/... · instagram · youtube shorts" />
           <button class="go" id="go">Проверить</button>
         </div>
@@ -183,8 +189,13 @@
   </div>
 
 <script>
-  // Same-origin API (the FastAPI backend serves this page).
-  const API = "/api/v1/check";
+  // API base: same-origin by default (when the backend serves this page).
+  // Override for a split deploy (UI on Vercel, backend on a tunnel) via either
+  //   ?api=https://your-tunnel.trycloudflare.com   (handy for the QR code), or
+  //   window.SCAMSHIELD_API set in config.js.
+  const API_BASE = (new URLSearchParams(location.search).get("api")
+                    || window.SCAMSHIELD_API || "").replace(/\/+$/, "");
+  const API = API_BASE + "/api/v1/check";
 
   const CAT_RU = {
     illegal_gambling: "Незаконные азартные игры",

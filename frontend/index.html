@@ -188,6 +188,10 @@
     </footer>
   </div>
 
+<!-- Optional: sets window.SCAMSHIELD_API to the backend URL for the Vercel
+     deploy. Absent (404) when the backend serves this page directly — that's
+     fine, the app falls back to same-origin. -->
+<script src="config.js"></script>
 <script>
   // API base: same-origin by default (when the backend serves this page).
   // Override for a split deploy (UI on Vercel, backend on a tunnel) via either

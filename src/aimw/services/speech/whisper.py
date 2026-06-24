@@ -25,8 +25,12 @@ class WhisperSpeechProvider:
         self._device = device or settings.whisper_device
         self._compute_type = compute_type or settings.whisper_compute_type
         self._vad_filter = settings.whisper_vad_filter if vad_filter is None else vad_filter
+        self._beam_size = settings.whisper_beam_size
+        self._batched = settings.whisper_batched
+        self._batch_size = settings.whisper_batch_size
         self.name = f"whisper-{self._model_size}"
         self._model = None
+        self._batched_pipe = None
 
     def _ensure_model(self):  # noqa: ANN201
         if self._model is None:
@@ -37,11 +41,26 @@ class WhisperSpeechProvider:
             )
         return self._model
 
-    def _transcribe_sync(self, audio_path: str) -> Transcript:
+    def _transcribe(self, audio_path: str):  # noqa: ANN202
+        """Run transcription, preferring the batched pipeline, with fallback."""
         model = self._ensure_model()
-        segments_iter, info = model.transcribe(
-            audio_path, word_timestamps=True, vad_filter=self._vad_filter
-        )
+        kwargs = dict(word_timestamps=True, vad_filter=self._vad_filter,
+                      beam_size=self._beam_size)
+        if self._batched:
+            try:
+                if self._batched_pipe is None:
+                    from faster_whisper import BatchedInferencePipeline
+
+                    self._batched_pipe = BatchedInferencePipeline(model=model)
+                return self._batched_pipe.transcribe(
+                    audio_path, batch_size=self._batch_size, **kwargs
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("speech.whisper.batched_fallback", error=str(exc))
+        return model.transcribe(audio_path, **kwargs)
+
+    def _transcribe_sync(self, audio_path: str) -> Transcript:
+        segments_iter, info = self._transcribe(audio_path)
         segments: list[TranscriptSegment] = []
         for seg in segments_iter:
             words = [

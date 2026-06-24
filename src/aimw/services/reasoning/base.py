@@ -19,6 +19,27 @@ log = get_logger(__name__)
 _PLACEHOLDER_KEYS = {"", "sk-or-changeme"}
 
 
+def empty_evidence_verdict() -> JudgeVerdict:
+    """The definitive verdict when fusion produced no evidence at all.
+
+    This is NOT a fallback (nothing failed) — it is the correct answer, returned
+    without invoking the LLM judge. ``llm_called=False`` makes the honest no-data
+    path explicit and auditable: the system never fabricates analysis for a video
+    that yielded no signals.
+    """
+    return JudgeVerdict(
+        risk_score=0,
+        category=RiskCategory.NONE,
+        confidence=0.0,
+        summary="No suspicious financial, gambling or fraud indicators were detected.",
+        explanation="No OCR, speech or visual evidence crossed the risk thresholds, "
+        "so the reasoning model was not invoked.",
+        model="skipped-no-evidence",
+        fallback_used=False,
+        llm_called=False,
+    )
+
+
 def build_reasoning_engine() -> ReasoningEngine:
     """Return the configured judge, or a deterministic fallback when no key is set."""
     settings = get_settings()
@@ -58,6 +79,7 @@ def compute_fallback_verdict(
             "risk thresholds.",
             model="fallback-deterministic",
             fallback_used=True,
+            llm_called=False,
         )
 
     category = max(aggregates, key=lambda c: aggregates[c])
@@ -95,6 +117,7 @@ def compute_fallback_verdict(
         suspicious_timestamps=suspicious_ts,
         model="fallback-deterministic",
         fallback_used=True,
+        llm_called=False,
     )
 
 

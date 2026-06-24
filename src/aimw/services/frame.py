@@ -25,6 +25,13 @@ class OpenCVFrameExtractor:
     ) -> list[Frame]:
         out_dir = self._frames_dir / video_id
         out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Single-pass ffmpeg decode is far faster than per-timestamp OpenCV
+        # seeking on long-GOP H.264; fall back to OpenCV, then placeholders.
+        if shutil.which("ffmpeg"):
+            frames = self._extract_ffmpeg(video_path, video_id, scenes, fps, out_dir)
+            if frames:
+                return frames
         try:
             import cv2
 
@@ -34,6 +41,37 @@ class OpenCVFrameExtractor:
             # Even without decode we still emit logical keyframe placeholders so
             # downstream services have timestamps to anchor against.
             return self._placeholder_keyframes(video_id, scenes, out_dir)
+
+    def _extract_ffmpeg(self, video_path, video_id, scenes, fps, out_dir) -> list[Frame]:  # noqa: ANN001
+        pattern = out_dir / "grid_%05d.jpg"
+        cmd = ["ffmpeg", "-y", "-i", video_path, "-vf", f"fps={fps}", "-q:v", "3", str(pattern)]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("frame.ffmpeg_failed", error=str(exc), video_id=video_id)
+            return []
+        files = sorted(out_dir.glob("grid_*.jpg"))
+        if not files:
+            return []
+
+        interval = 1.0 / max(fps, 0.1)
+        frames = [
+            Frame(
+                frame_id=new_frame_id(video_id, round(i * interval, 3)),
+                timestamp=round(i * interval, 3),
+                path=str(path),
+                is_keyframe=False,
+                scene_id=None,
+            )
+            for i, path in enumerate(files)
+        ]
+        # Mark the grid frame nearest each scene keyframe (no extra seeks).
+        for scene in scenes:
+            nearest = min(frames, key=lambda f: abs(f.timestamp - scene.keyframe_ts))
+            nearest.is_keyframe = True
+            nearest.scene_id = scene.scene_id
+        log.info("frame.extracted", video_id=video_id, count=len(frames), method="ffmpeg")
+        return frames
 
     def _extract_cv2(self, cv2, video_path, video_id, scenes, fps, out_dir) -> list[Frame]:  # noqa: ANN001
         cap = cv2.VideoCapture(video_path)

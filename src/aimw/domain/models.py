@@ -209,6 +209,7 @@ class JudgeVerdict(_Base):
     suspicious_timestamps: list[float] = Field(default_factory=list)
     model: str = ""
     fallback_used: bool = False
+    llm_called: bool = True  # False when the verdict came from deterministic code
 
 
 # ── Final report (output contract) ───────────────────────────────────────────
@@ -232,6 +233,7 @@ class AnalysisReport(_Base):
     evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
     metadata: VideoMetadata | None = None
     fallback_used: bool = False
+    llm_called: bool = True  # False when the judge was skipped (no evidence)
     generated_at: datetime = Field(default_factory=_utcnow)
 
 

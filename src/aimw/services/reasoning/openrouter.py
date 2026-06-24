@@ -38,7 +38,10 @@ class JudgeTransportError(RuntimeError):
 class OpenRouterReasoningEngine:
     def __init__(self) -> None:
         self._settings = get_settings()
-        self.model = self._settings.reasoning_model
+        self.model = self._settings.reasoning_model  # authoritative (e.g. 72B)
+        self._fast_model = self._settings.reasoning_fast_model.strip()
+        self._escalation = self._settings.reasoning_escalation and bool(self._fast_model)
+        self._escalation_conf = self._settings.reasoning_escalation_confidence
         # simple in-process rate limiter: max 1 concurrent judge call
         self._limiter = asyncio.Semaphore(1)
 
@@ -62,9 +65,9 @@ class OpenRouterReasoningEngine:
             async with self._limiter, httpx.AsyncClient(
                 timeout=self._settings.reasoning_timeout_seconds
             ) as client:
-                verdict = await self._judge_with_regeneration(client, messages)
-            verdict.model = self.model
-            log.info("reasoning.done", risk_score=verdict.risk_score, category=verdict.category)
+                verdict = await self._cascade(client, messages)
+            log.info("reasoning.done", risk_score=verdict.risk_score,
+                     category=verdict.category, model=verdict.model)
             return verdict
         except Exception as exc:  # noqa: BLE001
             if self._settings.reasoning_allow_fallback:
@@ -74,25 +77,48 @@ class OpenRouterReasoningEngine:
                 )
             raise
 
-    async def _judge_with_regeneration(
+    def _should_escalate(self, verdict: JudgeVerdict) -> bool:
+        """Escalate to the authoritative model when the fast judge is unsure:
+        low confidence, or it fell back to the catch-all category."""
+        return (
+            verdict.confidence < self._escalation_conf
+            or verdict.category == RiskCategory.SUSPICIOUS_FINANCIAL
+        )
+
+    async def _cascade(
         self, client: httpx.AsyncClient, messages: list[dict]
     ) -> JudgeVerdict:
-        content = await self._call(client, messages)
-        verdict = self._validate(content)
-        if verdict is not None:
-            return verdict
+        """Fast 32B first, escalating to the 72B only when the fast judge is
+        uncertain. Without escalation, just use the configured model."""
+        if not self._escalation:
+            return await self._evaluate(client, messages, self.model)
 
-        # One regeneration attempt with an explicit repair instruction.
-        log.warning("reasoning.invalid_json", note="requesting regeneration")
-        repair_messages = [
-            *messages,
-            {"role": "assistant", "content": content},
-            {"role": "user", "content": REPAIR_PROMPT},
-        ]
-        content = await self._call(client, repair_messages)
+        fast_verdict = await self._evaluate(client, messages, self._fast_model)
+        if not self._should_escalate(fast_verdict):
+            return fast_verdict
+        log.info("reasoning.escalate", fast_model=self._fast_model,
+                 fast_confidence=fast_verdict.confidence, to=self.model)
+        return await self._evaluate(client, messages, self.model)
+
+    async def _evaluate(
+        self, client: httpx.AsyncClient, messages: list[dict], model: str
+    ) -> JudgeVerdict:
+        """One judge evaluation against ``model`` with a JSON-repair regeneration."""
+        content = await self._call(client, messages, model)
         verdict = self._validate(content)
         if verdict is None:
-            raise ValueError("judge returned invalid JSON after regeneration")
+            # One regeneration attempt with an explicit repair instruction.
+            log.warning("reasoning.invalid_json", model=model, note="requesting regeneration")
+            repair_messages = [
+                *messages,
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": REPAIR_PROMPT},
+            ]
+            content = await self._call(client, repair_messages, model)
+            verdict = self._validate(content)
+        if verdict is None:
+            raise ValueError(f"judge ({model}) returned invalid JSON after regeneration")
+        verdict.model = model
         return verdict
 
     @retry(
@@ -101,9 +127,9 @@ class OpenRouterReasoningEngine:
         wait=wait_exponential(multiplier=1, min=2, max=30),
         reraise=True,
     )
-    async def _call(self, client: httpx.AsyncClient, messages: list[dict]) -> str:
+    async def _call(self, client: httpx.AsyncClient, messages: list[dict], model: str) -> str:
         payload = {
-            "model": self.model,
+            "model": model,
             "messages": messages,
             "temperature": 0.0,
             "response_format": {"type": "json_object"},

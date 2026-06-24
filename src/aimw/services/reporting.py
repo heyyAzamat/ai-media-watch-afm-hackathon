@@ -51,6 +51,7 @@ class ReportingService:
             evidence=evidence,
             metadata=metadata,
             fallback_used=verdict.fallback_used,
+            llm_called=verdict.llm_called,
         )
         log.info(
             "reporting.done",

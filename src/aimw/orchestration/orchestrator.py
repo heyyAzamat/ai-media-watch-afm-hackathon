@@ -24,10 +24,13 @@ from ..config import get_settings
 from ..domain.enums import EvidenceSource, JobStatus
 from ..domain.models import (
     AnalysisArtifacts,
+    Frame,
     ModalityResults,
     PreparedVideo,
 )
 from ..logging_config import get_logger
+from ..services.reasoning import empty_evidence_verdict
+from ..utils.frames import dedup_frames
 from .container import EngineContainer, build_container
 
 log = get_logger(__name__)
@@ -76,13 +79,81 @@ class AnalysisOrchestrator:
         )
 
     # ── Steps 4-6: PARALLEL modality analysis ────────────────────────────────
+    def _select_ocr_frames(self, prepared: PreparedVideo) -> list[Frame]:
+        """Reduce the OCR frame set (OCR is the dominant cost). See config."""
+        strategy = self._c.settings.ocr_frame_strategy
+        if strategy == "keyframes":
+            selected = prepared.keyframes
+        elif strategy == "dedup":
+            selected = dedup_frames(prepared.frames, self._c.settings.ocr_dedup_hamming)
+        else:
+            selected = prepared.frames
+        log.info(
+            "orchestrator.ocr_frames",
+            strategy=strategy,
+            selected=len(selected),
+            total=len(prepared.frames),
+        )
+        return selected
+
+    def _cap_keyframes(self, keyframes: list[Frame]) -> list[Frame]:
+        cap = self._c.settings.visual_max_keyframes
+        return keyframes[:cap] if cap and cap > 0 else keyframes
+
+    def _distinct_keyframes(self, prepared: PreparedVideo) -> list[Frame]:
+        """Visually-distinct keyframes (dedup) — the gating candidate set."""
+        if self._c.settings.visual_gating == "off":
+            return self._cap_keyframes(prepared.keyframes)
+        return self._cap_keyframes(
+            dedup_frames(prepared.keyframes, self._c.settings.visual_dedup_hamming)
+        )
+
+    def _gate_by_text_risk(
+        self, keyframes: list[Frame], text_risk: list
+    ) -> list[Frame]:
+        """Keep keyframes near an OCR/speech risk hit. Never prune to empty, and
+        never prune when text is silent (preserves visual-only recall)."""
+        if not text_risk:
+            return keyframes
+        window = self._c.settings.visual_gating_window_seconds
+
+        def near_risk(ts: float) -> bool:
+            for e in text_risk:
+                end = (e.end if e.end is not None else e.timestamp) + window
+                if e.timestamp - window <= ts <= end:
+                    return True
+            return False
+
+        gated = [kf for kf in keyframes if near_risk(kf.timestamp)]
+        return gated or keyframes
+
     async def analyze_modalities(self, prepared: PreparedVideo) -> ModalityResults:
         c = self._c
-        ocr_task = c.ocr.run(prepared.frames)
-        speech_task = c.speech.transcribe(prepared.audio_path)
-        visual_task = c.visual.analyze(prepared.keyframes)
+        ocr_frames = self._select_ocr_frames(prepared)
 
-        ocr, transcript, visual = await asyncio.gather(ocr_task, speech_task, visual_task)
+        if c.settings.visual_gating == "text_risk":
+            # Two-phase: OCR + speech first, then gate the VLM on text-risk hits.
+            ocr, transcript = await asyncio.gather(
+                c.ocr.run(ocr_frames), c.speech.transcribe(prepared.audio_path)
+            )
+            text_risk = c.text_risk.analyze(ocr, transcript)
+            candidates = self._distinct_keyframes(prepared)
+            keyframes = self._gate_by_text_risk(candidates, text_risk)
+            log.info("orchestrator.visual_gating", strategy="text_risk",
+                     keyframes=len(prepared.keyframes), candidates=len(candidates),
+                     analyzed=len(keyframes))
+            visual = await c.visual.analyze(keyframes)
+        else:
+            # off / dedup: visual is independent -> keep full parallelism.
+            keyframes = self._distinct_keyframes(prepared)
+            log.info("orchestrator.visual_gating", strategy=c.settings.visual_gating,
+                     keyframes=len(prepared.keyframes), analyzed=len(keyframes))
+            ocr, transcript, visual = await asyncio.gather(
+                c.ocr.run(ocr_frames),
+                c.speech.transcribe(prepared.audio_path),
+                c.visual.analyze(keyframes),
+            )
+
         log.info(
             "orchestrator.modalities",
             ocr=len(ocr),
@@ -106,17 +177,25 @@ class AnalysisOrchestrator:
         graph = c.fusion.fuse(text_risk, modalities.visual)
         timeline, markers = c.timeline.build(graph)
 
-        emit(JobStatus.JUDGING, 80, "final compliance reasoning")
-        context = {
-            "metadata": prepared.metadata,
-            "ocr_risk": [e for e in text_risk if e.source == EvidenceSource.OCR],
-            "speech_risk": [e for e in text_risk if e.source == EvidenceSource.SPEECH],
-            "transcript": modalities.transcript,
-            "visual": modalities.visual,
-            "graph": graph,
-            "timeline": timeline,
-        }
-        verdict = await c.reasoning.judge(context)
+        # Skip the paid 72B judge entirely when there is no evidence to weigh —
+        # the honest no-data path: return the definitive empty verdict, never a
+        # fabricated one (llm_called=False).
+        if c.settings.reasoning_skip_when_empty and not graph.events:
+            emit(JobStatus.JUDGING, 80, "no evidence — judge skipped")
+            log.info("orchestrator.judge_skipped", reason="no evidence")
+            verdict = empty_evidence_verdict()
+        else:
+            emit(JobStatus.JUDGING, 80, "final compliance reasoning")
+            context = {
+                "metadata": prepared.metadata,
+                "ocr_risk": [e for e in text_risk if e.source == EvidenceSource.OCR],
+                "speech_risk": [e for e in text_risk if e.source == EvidenceSource.SPEECH],
+                "transcript": modalities.transcript,
+                "visual": modalities.visual,
+                "graph": graph,
+                "timeline": timeline,
+            }
+            verdict = await c.reasoning.judge(context)
 
         emit(JobStatus.REPORTING, 92, "assembling report")
         report = c.reporting.build(

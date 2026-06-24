@@ -51,7 +51,11 @@ class PaddleOcrProvider:
         video overlays) are tried first; falls back to PaddleOCR defaults, then
         to the 2.x legacy constructor.
         """
-        base: dict = {"lang": self._lang}
+        # enable_mkldnn=False is REQUIRED on PaddlePaddle 3.x CPU: the oneDNN +
+        # new-PIR executor path crashes on every frame with
+        # "ConvertPirAttribute2RuntimeAttribute not support" — disabling oneDNN
+        # routes to the standard CPU kernels and OCR works.
+        base: dict = {"lang": self._lang, "enable_mkldnn": False}
         if not self._use_doc_preproc:
             base.update(
                 use_doc_orientation_classify=False,
@@ -71,7 +75,7 @@ class PaddleOcrProvider:
             fastest,  # mobile + no doc preproc + device + batch size
             dict(light, device=self._device),  # drop batch-size kwarg
             dict(base, device=self._device),  # drop model names
-            {"lang": self._lang},  # 3.x bundled defaults
+            {"lang": self._lang, "enable_mkldnn": False},  # 3.x bundled defaults
             {"use_angle_cls": True, "lang": self._lang, "show_log": False},  # 2.x legacy
         ]
 

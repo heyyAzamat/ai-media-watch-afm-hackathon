@@ -86,6 +86,14 @@ def create_app() -> FastAPI:
     if frontend_dir.is_dir():
         app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="app")
 
+    # Pre-downloaded demo clips served as direct-media URLs (e.g. /clips/x.mp4),
+    # so a stage demo never depends on live TikTok/YouTube downloads. Paste
+    # <host>/clips/<file>.mp4 into the app and /check fetches it via the
+    # direct-media path (no yt-dlp).
+    clips_dir = Path(__file__).resolve().parents[2] / "storage" / "clips"
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/clips", StaticFiles(directory=str(clips_dir)), name="clips")
+
     return app
 
 

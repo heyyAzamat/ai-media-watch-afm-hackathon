@@ -31,3 +31,4 @@ storage/frames/*
 .DS_Store
 .gstack/
 .vercel
+storage/clips/*.mp4

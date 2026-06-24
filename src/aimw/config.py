@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
+    # ── Scam model (the /check verdict source) ──────────────────────────────
+    # "orchestrator" -> existing Whisper/fusion pipeline (default; works today)
+    # "ml"           -> the ML team's model (services/scam_model/ml_model.py)
+    # "mock"         -> fixed placeholder verdict (frontend UI work)
+    scam_model_provider: Literal["orchestrator", "ml", "mock"] = "orchestrator"
+
     # ── Pipeline ────────────────────────────────────────────────────────────
     ocr_provider: ProviderMode = "mock"
     speech_provider: ProviderMode = "mock"

@@ -12,20 +12,22 @@ from fastapi import APIRouter, Form, status
 
 from ....config import get_settings
 from ....logging_config import get_logger
-from ....orchestration.orchestrator import AnalysisOrchestrator
 from ....services.downloader import DownloadError, download_media
+from ....services.scam_model import ScamVerdict, build_scam_model
 from ....utils.ids import new_video_id
 from ...errors import APIError
 
 router = APIRouter()
 log = get_logger(__name__)
 
-# Build once at import (wires the DI container / loads provider config).
-_orchestrator = AnalysisOrchestrator()
+# Build the configured model once at import. The default ("orchestrator") wraps
+# the existing pipeline; swap to the ML model via AIMW_SCAM_MODEL_PROVIDER=ml.
+_model = build_scam_model()
 
 
-@router.post("/check", summary="Synchronously analyze a video URL and return a verdict")
-async def check(source_url: str = Form(...)):
+@router.post("/check", response_model=ScamVerdict,
+             summary="Synchronously analyze a video URL and return a scam verdict")
+async def check(source_url: str = Form(...)) -> ScamVerdict:
     if not source_url.strip():
         raise APIError("source_url is required")
 
@@ -44,13 +46,7 @@ async def check(source_url: str = Form(...)):
             detail=str(exc),
         ) from exc
 
-    prepared = await asyncio.to_thread(
-        _orchestrator.prepare,
-        video_id=video_id,
-        path=str(path),
-        filename=path.name,
-        source_url=source_url,
-    )
-    artifacts = await _orchestrator.run(prepared)
-    log.info("check.done", video_id=video_id, risk_score=artifacts.report.risk_score)
-    return artifacts.report
+    verdict = await asyncio.to_thread(_model.analyze, str(path))
+    log.info("check.done", video_id=video_id, risk_score=verdict.risk_score,
+             category=verdict.category, model=_model.name)
+    return verdict

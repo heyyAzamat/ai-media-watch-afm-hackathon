@@ -69,14 +69,16 @@ Whisper alone barely moves the total.
    ~10s + paid call on benign videos and makes the honest no-data path explicit:
    the system never fabricates analysis for a video that produced no signals.
 
-8. **Faster judge cascade** (`reasoning_fast_model`, `reasoning_escalation`).
-   Two ways to use a faster judge:
-   - *Direct*: point `reasoning_model` at `qwen/qwen3-32b` for pure speed.
-   - *Cascade* (escalation on): run the fast 32B first and only escalate to the
-     authoritative 72B when the fast judge is uncertain (confidence below
-     `reasoning_escalation_confidence`, or it returned the catch-all category).
-     Clear-cut videos finish on the cheap model; ambiguous ones still get the
-     72B — speed on the bulk without losing accuracy on the hard cases.
+8. **Faster judge cascade** (`reasoning_fast_model`, `reasoning_escalation`,
+   **on by default**). Two ways to use a faster judge:
+   - *Cascade* (default, `reasoning_escalation=true`): run the fast 32B first and
+     only escalate to the authoritative 72B when the fast judge is uncertain
+     (confidence below `reasoning_escalation_confidence`, or it returned the
+     catch-all category). Clear-cut videos finish on the cheap model; ambiguous
+     ones still get the 72B — speed on the bulk without losing accuracy on the
+     hard cases.
+   - *Direct* (`reasoning_escalation=false`): point `reasoning_model` at
+     `qwen/qwen3-32b` for pure speed, or leave it on the 72B for max accuracy.
 
 Net effect: full run ~105s → ~20s (~5×) on CPU, with OCR off the critical path
 (per-frame OCR ~3.7s → 1.3s, only deduped frames are OCR'd, and those are
@@ -108,9 +110,37 @@ AIMW_OCR_BATCH_SIZE=16          # raise on GPU for more throughput
 On GPU, PaddleOCR + Whisper run 10-50× faster; CPU is the real reason the
 baseline is slow.
 
+**Sovereign CPU profile (no external AI APIs, data stays on-box):**
+For governmental / data-residency deployments where citizen data must not reach a
+third-party AI vendor, and with no GPU to self-host a 72B model. Everything below
+runs locally on CPU:
+```
+AIMW_OCR_PROVIDER=real        # PaddleOCR, local
+AIMW_SPEECH_PROVIDER=real     # faster-whisper, local
+AIMW_VISUAL_PROVIDER=none     # no VLM (emits no detections; never fabricates)
+AIMW_SEMANTIC_PROVIDER=local  # local embeddings catch paraphrased scams
+AIMW_OPENROUTER_API_KEY=sk-or-changeme   # placeholder ⇒ no OpenRouter call
+AIMW_WHISPER_MODEL=small      # large-v3 is slow on CPU
+```
+With the placeholder key, `build_reasoning_engine()` returns the deterministic
+on-box `FallbackReasoningEngine`, so **no request ever leaves the machine**. The
+analysis then rests on local OCR + Whisper text, scored by the lexicon **and** the
+local semantic matcher — the semantic layer is what recovers the nuance otherwise
+lost without the LLM judge. The fallback verdict is derived from the same evidence
+graph the semantic layer enriches. Verify isolation by running with outbound
+network blocked. When GPU infra becomes available, point `AIMW_VISUAL_PROVIDER`
+and the reasoning base URL at a self-hosted, OpenAI-compatible server (vLLM/Ollama)
+to add visual + LLM nuance while still keeping data in your boundary.
+
+9. **Environment hygiene — single ffmpeg/opencv stack** (done). Shipping both
+   `opencv-python` and `PyAV` makes their bundled ffmpeg dylibs collide (the
+   `libavdevice` duplicate warning) and can slow decode. The base/runtime image
+   pins **`opencv-python-headless` only** and has **no PyAV**: `scenedetect`'s
+   opencv/headless/pyav backends are optional extras we don't request (it falls
+   back to its default opencv backend, which uses our headless cv2). The GPU
+   `ml` extras additionally drop PaddleOCR's redundant full-opencv build to keep
+   one cv2 (see `requirements-ml.txt`).
+
 ## Further levers (not yet implemented — see NEXT_STEPS)
 
-- **Environment hygiene**: don't ship both `opencv-python` and `PyAV` — their
-  bundled ffmpeg dylibs collide (the `libavdevice` duplicate warning) and can
-  slow decode. Use `opencv-python-headless`, avoid PyAV.
 - **Cache by content hash**: identical re-uploads/segments reuse prior OCR.

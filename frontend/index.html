@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#070b14" />
+<link rel="manifest" href="manifest.json" />
+<title>ScamShield — проверка видео на мошенничество</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #070b14;
+    --bg-2: #0c1322;
+    --panel: #111a2c;
+    --line: #1e2a40;
+    --txt: #e8edf7;
+    --muted: #8190ab;
+    --accent: #38e1c4;       /* scanner cyan */
+    --safe: #2fd07a;
+    --warn: #ffb627;
+    --danger: #ff4d5e;
+    --glow: 0 0 0 1px var(--line), 0 18px 60px -20px rgba(0,0,0,.8);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Manrope', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--txt);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: max(24px, env(safe-area-inset-top)) 20px 40px;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(900px 500px at 50% -10%, rgba(56,225,196,.10), transparent 60%),
+      linear-gradient(transparent 0, transparent calc(100% - 1px), rgba(56,225,196,.035) 100%);
+    background-size: auto, 100% 44px;
+  }
+  .wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 22px; }
+
+  /* Header */
+  header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin-top: 8px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 30px; height: 30px; filter: drop-shadow(0 0 10px rgba(56,225,196,.5)); }
+  .brand h1 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+  .brand h1 b { color: var(--accent); font-weight: 800; }
+  .tagline { color: var(--muted); font-size: 14.5px; line-height: 1.5; max-width: 340px; }
+
+  /* Card */
+  .card { background: linear-gradient(180deg, var(--panel), var(--bg-2)); border-radius: 20px; box-shadow: var(--glow); padding: 22px; }
+
+  label.field-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; }
+  .input-row { display: flex; flex-direction: column; gap: 12px; }
+  input[type="url"], input[type="text"] {
+    width: 100%; padding: 15px 16px; border-radius: 13px;
+    background: #0a1120; border: 1px solid var(--line); color: var(--txt);
+    font-size: 16px; font-family: inherit; outline: none; transition: border-color .2s, box-shadow .2s;
+  }
+  input::placeholder { color: #56627d; }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,225,196,.16); }
+
+  button.go {
+    width: 100%; padding: 16px; border: none; border-radius: 13px; cursor: pointer;
+    font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: .01em;
+    color: #04140f; background: linear-gradient(180deg, #4ff0d2, #25c4a8);
+    box-shadow: 0 10px 30px -10px rgba(56,225,196,.6); transition: transform .12s, opacity .2s;
+  }
+  button.go:active { transform: translateY(1px) scale(.995); }
+  button.go:disabled { opacity: .55; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 12px; text-align: center; line-height: 1.5; }
+
+  /* Loading */
+  .scanner { display: none; flex-direction: column; align-items: center; gap: 18px; padding: 10px 0 4px; }
+  .scanner.on { display: flex; }
+  .radar { width: 78px; height: 78px; position: relative; }
+  .radar::before, .radar::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid var(--accent); opacity: .0;
+    animation: pulse 1.8s ease-out infinite;
+  }
+  .radar::after { animation-delay: .9s; }
+  @keyframes pulse { 0% { transform: scale(.4); opacity: .7; } 100% { transform: scale(1); opacity: 0; } }
+  .radar i { position: absolute; inset: 30px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 18px var(--accent); }
+  .status { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 13.5px; min-height: 18px; letter-spacing: .02em; }
+
+  /* Result */
+  .result { display: none; }
+  .result.on { display: block; animation: rise .5s cubic-bezier(.2,.8,.2,1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  .gauge { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .ring { position: relative; width: 184px; height: 184px; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .track { fill: none; stroke: #16213a; stroke-width: 13; }
+  .ring .bar { fill: none; stroke-width: 13; stroke-linecap: round; transition: stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1), stroke .4s; }
+  .ring .num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring .num b { font-family: 'JetBrains Mono', monospace; font-size: 52px; font-weight: 700; line-height: 1; }
+  .ring .num span { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+
+  .verdict { text-align: center; margin-top: 16px; }
+  .verdict .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 15px; }
+  .verdict .cat { margin-top: 14px; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+  .verdict .why { margin-top: 10px; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+  .meta { margin-top: 18px; display: flex; justify-content: center; gap: 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+  .meta b { color: var(--txt); }
+
+  .again { margin-top: 22px; }
+  button.ghost { width: 100%; padding: 14px; border-radius: 13px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600; color: var(--txt); background: transparent; border: 1px solid var(--line); transition: border-color .2s; }
+  button.ghost:active { border-color: var(--accent); }
+
+  .err { display: none; margin-top: 16px; padding: 14px 16px; border-radius: 13px; background: rgba(255,77,94,.08); border: 1px solid rgba(255,77,94,.3); color: #ffc4ca; font-size: 14px; line-height: 1.5; }
+  .err.on { display: block; }
+
+  footer { color: #4a566e; font-size: 11.5px; text-align: center; line-height: 1.6; }
+  footer b { color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)">
+          <path d="M12 2.5 4 5.5v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10v-6L12 2.5Z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <h1>Scam<b>Shield</b></h1>
+      </div>
+      <p class="tagline">Вставь ссылку на видео — узнай за секунды, не мошенничество ли это: казино, пирамиды, «гарантированный доход».</p>
+    </header>
+
+    <div class="card">
+      <!-- INPUT -->
+      <div id="form">
+        <label class="field-label" for="url">Ссылка на видео</label>
+        <div class="input-row">
+          <input id="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                 placeholder="https://tiktok.com/... · instagram · youtube shorts" />
+          <button class="go" id="go">Проверить</button>
+        </div>
+        <p class="hint">TikTok · Instagram Reels · YouTube Shorts. Анализ идёт на нашем сервере, без облачных ИИ-сервисов.</p>
+      </div>
+
+      <!-- LOADING -->
+      <div class="scanner" id="scanner">
+        <div class="radar"><i></i></div>
+        <div class="status" id="status">Запуск…</div>
+      </div>
+
+      <!-- RESULT -->
+      <div class="result" id="result">
+        <div class="gauge">
+          <div class="ring">
+            <svg width="184" height="184" viewBox="0 0 184 184">
+              <circle class="track" cx="92" cy="92" r="80"></circle>
+              <circle class="bar" id="bar" cx="92" cy="92" r="80"></circle>
+            </svg>
+            <div class="num"><b id="score">0</b><span>риск / 100</span></div>
+          </div>
+        </div>
+        <div class="verdict">
+          <span class="badge" id="badge">—</span>
+          <div class="cat" id="cat">—</div>
+          <div class="why" id="why"></div>
+        </div>
+        <div class="meta">
+          <div>уверенность · <b id="conf">—</b></div>
+          <div>модель · <b id="model">—</b></div>
+        </div>
+        <div class="again"><button class="ghost" id="again">Проверить другое видео</button></div>
+      </div>
+
+      <div class="err" id="err"></div>
+    </div>
+
+    <footer>
+      ScamShield · AFM AI Hackathon 2026 · трек <b>AI Media Watch</b><br/>
+      MVP: демонстрация на реальных видео. Анализ объясним и независим от внешних ИИ-сервисов.
+    </footer>
+  </div>
+
+<script>
+  // Same-origin API (the FastAPI backend serves this page).
+  const API = "/api/v1/check";
+
+  const CAT_RU = {
+    illegal_gambling: "Незаконные азартные игры",
+    casino_advertising: "Реклама казино",
+    sports_betting: "Ставки на спорт",
+    pyramid_scheme: "Финансовая пирамида",
+    ponzi_scheme: "Схема Понци",
+    guaranteed_income: "Обещание гарантированного дохода",
+    referral_scam: "Реферальная схема",
+    fake_investment: "Фейковые инвестиции",
+    financial_manipulation: "Финансовые манипуляции",
+    hidden_advertising: "Скрытая реклама",
+    suspicious_financial: "Подозрительная фин. активность",
+    none: "Угроз не обнаружено",
+  };
+  const STEPS = ["Скачиваю видео…", "Извлекаю аудио…", "Распознаю речь (Whisper)…", "Анализирую признаки…", "Формирую вердикт…"];
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), scanner = $("scanner"), result = $("result"), errBox = $("err");
+  const C = 2 * Math.PI * 80; // ring circumference
+  $("bar").style.strokeDasharray = C;
+  $("bar").style.strokeDashoffset = C;
+
+  let stepTimer = null;
+
+  function setState(s) {
+    form.style.display = s === "form" ? "block" : "none";
+    scanner.classList.toggle("on", s === "loading");
+    result.classList.toggle("on", s === "result");
+    if (s !== "error") errBox.classList.remove("on");
+  }
+
+  function runStatusLoop() {
+    let i = 0; $("status").textContent = STEPS[0];
+    stepTimer = setInterval(() => { i = Math.min(i + 1, STEPS.length - 1); $("status").textContent = STEPS[i]; }, 2200);
+  }
+  function stopStatusLoop() { clearInterval(stepTimer); }
+
+  function colorFor(score) {
+    if (score >= 70) return getComputedStyle(document.documentElement).getPropertyValue("--danger").trim();
+    if (score >= 40) return getComputedStyle(document.documentElement).getPropertyValue("--warn").trim();
+    return getComputedStyle(document.documentElement).getPropertyValue("--safe").trim();
+  }
+  function verdictLabel(score) {
+    if (score >= 70) return { t: "🚨 Высокий риск мошенничества", c: "--danger" };
+    if (score >= 40) return { t: "⚠️ Подозрительно", c: "--warn" };
+    return { t: "✅ Угроз не обнаружено", c: "--safe" };
+  }
+
+  function render(v) {
+    const score = Math.max(0, Math.min(100, v.risk_score | 0));
+    const col = colorFor(score);
+    const lab = verdictLabel(score);
+    // animate ring
+    $("bar").style.stroke = col;
+    requestAnimationFrame(() => { $("bar").style.strokeDashoffset = C * (1 - score / 100); });
+    // animate number
+    let n = 0; const t0 = performance.now();
+    (function tick(now){ const p = Math.min(1, (now - t0) / 1000); n = Math.round(p * score); $("score").textContent = n; if (p < 1) requestAnimationFrame(tick); })(t0);
+    // verdict text
+    const badge = $("badge");
+    badge.textContent = lab.t;
+    const cval = getComputedStyle(document.documentElement).getPropertyValue(lab.c).trim();
+    badge.style.color = cval; badge.style.background = cval + "1f";
+    $("cat").textContent = CAT_RU[v.category] || v.category || "—";
+    $("cat").style.color = col;
+    $("why").textContent = v.explanation || "";
+    $("conf").textContent = (v.confidence != null) ? Math.round(v.confidence * 100) + "%" : "—";
+    $("model").textContent = v.model || "—";
+    setState("result");
+  }
+
+  async function check() {
+    const url = $("url").value.trim();
+    if (!url) { $("url").focus(); return; }
+    setState("loading"); runStatusLoop();
+    try {
+      const body = new FormData(); body.append("source_url", url);
+      const res = await fetch(API, { method: "POST", body });
+      stopStatusLoop();
+      if (!res.ok) {
+        let detail = "Не удалось проверить это видео.";
+        try { const e = await res.json(); detail = e.detail || e.error || detail; } catch {}
+        showError(detail);
+        return;
+      }
+      const data = await res.json();
+      render(data);
+    } catch (e) {
+      stopStatusLoop();
+      showError("Сервер недоступен. Проверь, что бэкенд запущен и ссылка верна.");
+    }
+  }
+
+  function showError(msg) {
+    setState("form");
+    errBox.textContent = "⚠️ " + msg;
+    errBox.classList.add("on");
+  }
+
+  $("go").addEventListener("click", check);
+  $("url").addEventListener("keydown", (e) => { if (e.key === "Enter") check(); });
+  $("again").addEventListener("click", () => { $("url").value = ""; setState("form"); $("url").focus(); });
+</script>
+</body>
+</html>

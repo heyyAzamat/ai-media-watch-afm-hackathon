@@ -7,9 +7,11 @@ enqueues work and reads results. All business logic lives in the engine.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .api.errors import register_error_handlers
@@ -74,7 +76,15 @@ def create_app() -> FastAPI:
             "docs": "/docs",
             "health": "/health",
             "api": settings.api_prefix,
+            "app": "/app/",
         }
+
+    # Serve the ScamShield web app (PWA) at /app — same origin as the API, so the
+    # phone hits one URL and there are no CORS concerns. html=True serves
+    # index.html at /app/.
+    frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+    if frontend_dir.is_dir():
+        app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="app")
 
     return app
 

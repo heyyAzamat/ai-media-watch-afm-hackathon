@@ -1,0 +1,11 @@
+{
+  "name": "ScamShield",
+  "short_name": "ScamShield",
+  "description": "Проверка видео из соцсетей на признаки мошенничества за секунды.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070b14",
+  "theme_color": "#070b14",
+  "lang": "ru",
+  "icons": []
+}
